@@ -338,11 +338,11 @@ pub const Diagnostics = struct {
 };
 
 pub const DB = struct {
-    const self = @This();
+    const Self = @This();
 
     db: *c.sqlite3,
 
-    pub fn init(file: []const u8) !self {
+    pub fn init(file: []const u8) !Self {
         var flags: c_int = c.SQLITE_OPEN_URI;
         flags |= c.SQLITE_OPEN_CREATE;
 
@@ -359,6 +359,10 @@ pub const DB = struct {
             return errorFromResultCode(result);
         }
 
-        return self{ .db = db.? };
+        return Self{ .db = db.? };
+    }
+
+    pub fn deinit(self: *Self) void {
+        _ = c.sqlite3_close(self.db);
     }
 };
