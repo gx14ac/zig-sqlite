@@ -342,20 +342,15 @@ pub const DB = struct {
 
     db: *c.sqlite3,
 
-    pub fn init(file: []const u8) !Self {
-        var flags: c_int = c.SQLITE_OPEN_URI;
-        flags |= c.SQLITE_OPEN_CREATE;
+    pub fn init(file: []const u8, flags: c_int) !Self {
+        var full_flags = flags;
+        if (flags & c.SQLITE_OPEN_READONLY != c.SQLITE_OPEN_READONLY) {
+            full_flags |= c.SQLITE_OPEN_READWRITE;
+        }
 
-        var db: ?*c.sqlite3 = undefined;
-        const result = c.sqlite3_open_v2(file.ptr, &db, flags, null);
-        if (result != c.SQLITE_OK or db == null) {
-            if (db) |v| {
-                const err = getLastDetailedErrorFromDb(v);
-                std.debug.panic("can not opened sqlite {}", .{err});
-            } else {
-                const err = getDetailedErrorFromResultCode(result);
-                std.debug.panic("can not opened sqlite {}", .{err});
-            }
+        var db: ?*c.sqlite3 = null;
+        const result = c.sqlite3_open_v2(file.ptr, &db, full_flags, null);
+        if (result != c.SQLITE_OK) {
             return errorFromResultCode(result);
         }
 
