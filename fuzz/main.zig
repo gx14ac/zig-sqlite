@@ -8,6 +8,6 @@ pub export fn main() callconv(.C) void {
 
 pub fn zigMain() !void {
     std.debug.print("starting fuzz..\n", .{});
-    var db = try sqlite.DB.init(":memory", c.SQLITE_OPEN_CREATE);
+    var db = try sqlite.DB.init("test.sqlite", c.SQLITE_OPEN_CREATE);
     defer db.deinit();
 }
