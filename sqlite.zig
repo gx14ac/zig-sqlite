@@ -337,7 +337,7 @@ pub const Diagnostics = struct {
     }
 };
 
-pub const DB = struct {
+pub const Sqlite = struct {
     const Self = @This();
 
     conn: *c.sqlite3,
@@ -360,4 +360,36 @@ pub const DB = struct {
     pub fn deinit(self: *Self) void {
         _ = c.sqlite3_close(self.conn);
     }
+
+    pub fn exec(self: *Self, sql: [*:0]const u8) !void {
+        const result = c.sqlite3_exec(self.conn, sql, null, null, null);
+        if (result != c.SQLITE_OK) {
+            return errorFromResultCode(result);
+        }
+    }
 };
+
+fn testDB() Sqlite {
+    var db = Sqlite.init("test.sqlite", c.SQLITE_OPEN_CREATE) catch unreachable;
+    db.exec(
+        \\
+        \\	create table test (
+        \\		id integer primary key not null,
+        \\		cint integer not null default(0),
+        \\		cintn integer null,
+        \\		creal real not null default(0.0),
+        \\		crealn real null,
+        \\		ctext text not null default(''),
+        \\		ctextn text null,
+        \\		cblob blob not null default(''),
+        \\		cblobn blob null,
+        \\		uniq int unique null
+        \\	)
+    ) catch unreachable;
+    return db;
+}
+
+test "test db" {
+    var conn = testDB();
+    defer conn.deinit();
+}
