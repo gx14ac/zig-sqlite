@@ -340,7 +340,7 @@ pub const Diagnostics = struct {
 pub const DB = struct {
     const Self = @This();
 
-    db: *c.sqlite3,
+    conn: *c.sqlite3,
 
     pub fn init(file: []const u8, flags: c_int) !Self {
         var full_flags = flags;
@@ -348,16 +348,16 @@ pub const DB = struct {
             full_flags |= c.SQLITE_OPEN_READWRITE;
         }
 
-        var db: ?*c.sqlite3 = null;
-        const result = c.sqlite3_open_v2(file.ptr, &db, full_flags, null);
+        var conn: ?*c.sqlite3 = null;
+        const result = c.sqlite3_open_v2(file.ptr, &conn, full_flags, null);
         if (result != c.SQLITE_OK) {
             return errorFromResultCode(result);
         }
 
-        return Self{ .db = db.? };
+        return Self{ .conn = conn.? };
     }
 
     pub fn deinit(self: *Self) void {
-        _ = c.sqlite3_close(self.db);
+        _ = c.sqlite3_close(self.conn);
     }
 };

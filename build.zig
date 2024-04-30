@@ -57,29 +57,20 @@ pub fn build(b: *std.Build) void {
     sqlite_mod.addIncludePath(.{ .path = "c/" });
     sqlite_mod.linkLibrary(sqlite_lib);
 
-    // fuzzing
+    // main test
     //
-    const lib = b.addStaticLibrary(.{
-        .name = "sqlite",
-        .target = getTarget(target, true),
+    const lib_test = b.addTest(.{
+        .root_source_file = .{ .path = "sqlite.zig" },
+        .target = target,
         .optimize = optimize,
     });
-    lib.addCSourceFile(.{ .file = .{ .path = "c/sqlite3.c" }, .flags = c_flags });
-    lib.addIncludePath(.{ .path = "c" });
-    lib.linkLibC();
+    lib_test.addCSourceFile(.{ .file = .{ .path = "c/sqlite3.c" }, .flags = c_flags });
+    lib_test.addIncludePath(.{ .path = "c" });
+    lib_test.linkLibC();
 
-    const fuzz_compile_run = b.step("fuzz", "Build executable for fuzz testing using afl-clang-lto");
+    const lib_run_test = b.addRunArtifact(lib_test);
+    lib_run_test.has_side_effects = true;
 
-    // configure executable path
-    const fuzz_debug_exe = b.addExecutable(.{
-        .name = "fuzz-debug",
-        .root_source_file = .{ .path = "fuzz/main.zig" },
-        .target = getTarget(target, true),
-        .optimize = optimize,
-    });
-    fuzz_debug_exe.addIncludePath(.{ .path = "c" });
-    fuzz_debug_exe.linkLibrary(lib);
-    fuzz_debug_exe.root_module.addImport("sqlite", sqlite_mod);
-    const install_fuzz_debug_exe = b.addInstallArtifact(fuzz_debug_exe, .{});
-    fuzz_compile_run.dependOn(&install_fuzz_debug_exe.step);
+    const test_step = b.step("test", "Run unit tests");
+    test_step.dependOn(&lib_run_test.step);
 }
