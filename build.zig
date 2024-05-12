@@ -60,7 +60,7 @@ pub fn build(b: *std.Build) void {
     // main test
     //
     const lib_test = b.addTest(.{
-        .root_source_file = .{ .path = "sqlite.zig" },
+        .root_source_file = .{ .path = "test.zig" },
         .target = target,
         .optimize = optimize,
     });
