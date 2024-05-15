@@ -271,6 +271,10 @@ pub fn errorFromResultCode(code: c_int) Error {
     }
 }
 
+pub const Blob = struct {
+    value: []const u8,
+};
+
 pub const Sqlite = struct {
     const Self = @This();
 
@@ -291,14 +295,131 @@ pub const Sqlite = struct {
         return Self{ .conn = conn.? };
     }
 
-    pub fn deinit(self: *Self) void {
-        _ = c.sqlite3_close(self.conn);
+    pub fn close(self: Self) void {
+        _ = c.sqlite3_close_v2(self.conn);
     }
 
-    pub fn exec(self: *Self, sql: [*:0]const u8) !void {
+    pub fn prepare(self: Self, sql: []const u8, values: anytype) !Statement {
+        var n_stmt: ?*c.sqlite3_stmt = null;
+        const result = c.sqlite3_prepare_v2(self.conn, sql.ptr, @intCast(sql.len), &n_stmt, null);
+        if (result != c.SQLITE_OK) {
+            return errorFromResultCode(result);
+        }
+
+        const stmt = n_stmt.?;
+        if (values.len > 0) {
+            inline for (values, 0..) |value, i| {
+                try bindValue(@TypeOf(value), stmt, value, i + 1);
+            }
+        }
+
+        return .{
+            .stmt = stmt,
+            .conn = self.conn,
+        };
+    }
+
+    pub fn execNoArgs(self: Self, sql: [*:0]const u8) !void {
         const result = c.sqlite3_exec(self.conn, sql, null, null, null);
         if (result != c.SQLITE_OK) {
             return errorFromResultCode(result);
+        }
+    }
+
+    pub fn exec(self: Self, sql: []const u8, values: anytype) !void {
+        const stmt = try self.prepare(sql, values);
+        defer stmt.deinit();
+        try stmt.stepToCompletion();
+    }
+
+    pub fn changes(self: Self) usize {
+        return @intCast(c.sqlite3_changes(self.conn));
+    }
+};
+
+fn bindValue(comptime T: type, stmt: *c.sqlite3_stmt, value: anytype, bind_index: c_int) !void {
+    var rc: c_int = 0;
+
+    switch (@typeInfo(T)) {
+        .Null => rc = c.sqlite3_bind_null(stmt, bind_index),
+        .Int, .ComptimeInt => rc = c.sqlite3_bind_int64(stmt, bind_index, @intCast(value)),
+        .Float, .ComptimeFloat => rc = c.sqlite3_bind_double(stmt, bind_index, value),
+        .Bool => {
+            if (value) {
+                rc = c.sqlite3_bind_int64(stmt, bind_index, @intCast(1));
+            } else {
+                rc = c.sqlite3_bind_int64(stmt, bind_index, @intCast(0));
+            }
+        },
+        .Pointer => |ptr| {
+            switch (ptr.size) {
+                .One => switch (@typeInfo(ptr.child)) {
+                    .Array => |arr| {
+                        if (arr.child == u8) {
+                            rc = c.sqlite3_bind_text(stmt, bind_index, value.ptr, @intCast(value.len), c.SQLITE_STATIC);
+                        } else {
+                            bindError(T);
+                        }
+                    },
+                    else => bindError(T),
+                },
+                .Slice => switch (ptr.child) {
+                    u8 => rc = c.sqlite3_bind_text(stmt, bind_index, value.ptr, @intCast(value.len), c.SQLITE_STATIC),
+                    else => bindError(T),
+                },
+                else => bindError(T),
+            }
+        },
+        .Array => return bindValue(@TypeOf(&value), stmt, &value, bind_index),
+        .Optional => |opt| {
+            if (value) |v| {
+                return bindValue(opt.child, stmt, v, bind_index);
+            } else {
+                rc = c.sqlite3_bind_null(stmt, bind_index);
+            }
+        },
+        .Struct => {
+            if (T == Blob) {
+                const inner = value.value;
+                rc = c.sqlite3_bind_blob(stmt, bind_index, @ptrCast(inner), @intCast(inner.len), c.SQLITE_STATIC);
+            } else {
+                bindError(T);
+            }
+        },
+        else => bindError(T),
+    }
+
+    if (rc != c.SQLITE_OK) {
+        return errorFromResultCode(rc);
+    }
+}
+
+fn bindError(comptime T: type) void {
+    @compileError("cannot bind value of type " ++ @typeName(T));
+}
+
+// `Statement`
+// An interface for database manipulation that provides the ability to bind parameters
+// before compiling SQL statements and submitting them to the database.
+// Specific values in a query can be set as parameters. Parameters are set to values at runtime.
+pub const Statement = struct {
+    const Self = @This();
+
+    conn: *c.sqlite3,
+    stmt: *c.sqlite3_stmt,
+
+    pub fn deinit(self: Self) void {
+        _ = c.sqlite3_finalize(self.stmt);
+    }
+
+    pub fn stepToCompletion(self: Self) !void {
+        const stmt = self.stmt;
+        while (true) {
+            switch (c.sqlite3_step(stmt)) {
+                c.SQLITE_DONE => return,
+                c.SQLITE_ROW => continue,
+                else => |result| return errorFromResultCode(result),
+            }
         }
     }
 };

@@ -3,12 +3,13 @@ const build_options = @import("build_options");
 const mem = std.mem;
 const testing = std.testing;
 pub const c = @import("c.zig").c;
+const t = std.testing;
 
 const Sqlite = @import("sqlite.zig").Sqlite;
 
 fn testDB() Sqlite {
     var db = Sqlite.init("test.sqlite", c.SQLITE_OPEN_CREATE) catch unreachable;
-    db.exec(
+    db.execNoArgs(
         \\
         \\	create table test (
         \\		id integer primary key not null,
@@ -26,7 +27,15 @@ fn testDB() Sqlite {
     return db;
 }
 
-test "test db" {
-    var conn = testDB();
-    defer conn.deinit();
+test "test exec" {
+    const conn = testDB();
+    defer conn.close();
+
+    conn.exec(
+        \\
+        \\	insert into test (cint, creal, ctext, cblob)
+        \\	values (?1, ?2, ?3, ?4)
+    , .{ -3, 2.2, "three", "four" }) catch unreachable;
+
+    try t.expectEqual(@as(usize, 1), conn.changes());
 }
