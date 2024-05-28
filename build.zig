@@ -36,7 +36,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    sqlite_lib.addIncludePath(.{ .path = "c/" });
+    sqlite_lib.addIncludePath(b.path("c/"));
     sqlite_lib.addCSourceFiles(.{
         .files = &[_][]const u8{
             "c/sqlite3.c",
@@ -45,27 +45,27 @@ pub fn build(b: *std.Build) void {
         .flags = c_flags,
     });
     sqlite_lib.linkLibC();
-    sqlite_lib.installHeader(.{ .path = "c/sqlite3.h" }, "sqlite3.h");
+    sqlite_lib.installHeader(b.path("c/sqlite3.h"), "sqlite3.h");
 
     b.installArtifact(sqlite_lib);
 
     // create sqlite module
     const sqlite_mod = b.addModule("sqlite", .{
-        .root_source_file = .{ .path = "sqlite.zig" },
+        .root_source_file = b.path("sqlite.zig"),
         .link_libc = true,
     });
-    sqlite_mod.addIncludePath(.{ .path = "c/" });
+    sqlite_mod.addIncludePath(b.path("c/"));
     sqlite_mod.linkLibrary(sqlite_lib);
 
     // main test
     //
     const lib_test = b.addTest(.{
-        .root_source_file = .{ .path = "test.zig" },
+        .root_source_file = b.path("test.zig"),
         .target = target,
         .optimize = optimize,
     });
-    lib_test.addCSourceFile(.{ .file = .{ .path = "c/sqlite3.c" }, .flags = c_flags });
-    lib_test.addIncludePath(.{ .path = "c" });
+    lib_test.addCSourceFile(.{ .file = b.path("c/sqlite3.c"), .flags = c_flags });
+    lib_test.addIncludePath(b.path("c"));
     lib_test.linkLibC();
 
     const lib_run_test = b.addRunArtifact(lib_test);
