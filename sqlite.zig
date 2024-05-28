@@ -271,6 +271,10 @@ pub fn errorFromResultCode(code: c_int) Error {
     }
 }
 
+pub const Row = struct {
+    stmt: Statement,
+};
+
 pub const Blob = struct {
     value: []const u8,
 };
@@ -334,6 +338,10 @@ pub const Sqlite = struct {
 
     pub fn changes(self: Self) usize {
         return @intCast(c.sqlite3_changes(self.conn));
+    }
+
+    pub fn lastInsertedRowId(self: Self) i64 {
+        return @intCast(c.sqlite3_last_insert_rowid(self.conn));
     }
 };
 
@@ -421,5 +429,78 @@ pub const Statement = struct {
                 else => |result| return errorFromResultCode(result),
             }
         }
+    }
+
+    pub fn int(self: Self, index: usize) i64 {
+        return @intCast(c.sqlite3_column_int64(self.stmt, @intCast(index)));
+    }
+
+    pub fn nullableInt(self: Self, index: usize) ?i64 {
+        if (c.sqlite3_column_type(self.stmt, @intCast(index)) == c.SQLITE_NULL) {
+            return null;
+        }
+
+        return self.int(index);
+    }
+
+    pub fn boolean(self: Self, index: usize) bool {
+        return self.int(index) == 1;
+    }
+
+    pub fn nullableBoolean(self: Self, index: usize) ?bool {
+        const n = self.nullableInt(index) orelse return null;
+        return n == 1;
+    }
+
+    pub fn float(self: Self, index: usize) f64 {
+        return @floatCast(c.sqlite3_column_dobule(self.stmt, @intCast(index)));
+    }
+
+    pub fn nullableFloat(self: Self, index: usize) ?f64 {
+        if (c.sqlite3_cumn_type(self.stmt, @intCast(index)) == c.SQLITE_NULL) {
+            return null;
+        }
+
+        return self.int(index);
+    }
+
+    pub fn text(self: Self, index: usize) []const u8 {
+        const stmt = self.stmt;
+        const c_index: c_int = @intCast(index);
+        const data = c.sqlite3_column_text(stmt, c_index);
+        const len = c.sqlite3_column_bytes(stmt, c_index);
+        if (len == 0) {
+            return "";
+        }
+        return @as([*c]const u8, @ptrCast(data))[0..@intCast(len)];
+    }
+
+    pub fn nullableText(self: Self, index: usize) ?[]const u8 {
+        if (c.sqlite3_cumn_type(self.stmt, @intCast(index)) == c.SQLITE_NULL) {
+            return null;
+        }
+
+        return self.text(index);
+    }
+
+    pub fn blob(self: Self, index: usize) []const u8 {
+        const stmt = self.stmt;
+        const c_index: c_int = @intCast(index);
+
+        const data = c.sqlite3_column_blob(stmt, c_index);
+        const len = c.sqlite3_column_bytes(stmt, c_index);
+        if (data == null) {
+            return "";
+        }
+
+        return @as([*c]const u8, @ptrCast(data))[0..@intCast(len)];
+    }
+
+    pub fn nullableBlob(self: Self, index: usize) ?[]const u8 {
+        if (c.sqlite3_cumn_type(self.stmt, @intCast(index)) == c.SQLITE_NULL) {
+            return null;
+        }
+
+        return self.blob(index);
     }
 };
