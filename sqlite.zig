@@ -272,7 +272,21 @@ pub fn errorFromResultCode(code: c_int) Error {
 }
 
 pub const Row = struct {
+    const Self = @This();
+
     stmt: Statement,
+
+    pub fn deinit(self: Self) void {
+        self.stmt.deinit();
+    }
+
+    pub fn int(self: Self, index: usize) i64 {
+        return self.stmt.int(index);
+    }
+
+    pub fn nullableInt(self: Self, index: usize) ?i64 {
+        return self.stmt.nullableInt(index);
+    }
 };
 
 pub const Blob = struct {
